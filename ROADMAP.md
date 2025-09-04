@@ -1,5 +1,17 @@
 # 🗺️ Roadmap - NamesOfGod App
 
+## 📊 Status de Implementação
+
+### ✅ **Concluído**
+- **⭐ App Store Rating** - Sistema completo com 5 triggers inteligentes
+
+### 🎯 **Pendente**
+- **🔒 Lock Screen Integration**
+- **🔔 Notificações Diárias** (aguardando decisão do usuário)
+- **📱 Melhorias de Interface**
+
+---
+
 ## 📋 Próxima Versão (v2.1)
 
 ### 🎯 Funcionalidades Planejadas
@@ -16,11 +28,12 @@
   - Horário configurável pelo usuário
   - Mensagens motivacionais relacionadas aos nomes de Deus
 
-#### ⭐ **App Store Rating**
+#### ⭐ **App Store Rating** ✅ **CONCLUÍDO**
 - **Sistema de avaliação integrado**
   - Solicitação elegante para avaliar o app na App Store
   - Timing inteligente (após uso consistente)
   - Integração com StoreKit
+  - **Implementado:** 5 triggers inteligentes + botão manual
 
 #### 📱 **Melhorias de Interface**
 
