@@ -8,6 +8,7 @@
 
 import SwiftUI
 import AVFoundation
+import StoreKit
 
 class NamesOfGodViewModel: NSObject, ObservableObject {
     @Published var currentIndex = 0
@@ -21,6 +22,12 @@ class NamesOfGodViewModel: NSObject, ObservableObject {
     @Published var showDetailedInfo = false
     @Published var showInfo = false
     @Published var showCounterFlash = false // Para flash visual no contador
+    @Published var hasRequestedReview = false // Para controlar se já pediu review
+    @Published var hasCompletedFirstMeditation = false // Primeira meditação completa
+    @Published var hasUsedAudioFeature = false // Usou funcionalidade de áudio
+    @Published var hasViewedDetailedInfo = false // Viu informações detalhadas
+    @Published var hasUsedPrintFeature = false // Usou funcionalidade de impressão
+    @Published var firstLaunchDate = Date() // Data do primeiro uso
     
     private var timer: Timer?
     private var audioPlayer: AVAudioPlayer?
@@ -73,6 +80,11 @@ class NamesOfGodViewModel: NSObject, ObservableObject {
         isPaused = true
         showControls = true
         isFirstTime = false
+        
+        // Verificar oportunidades de review periodicamente
+        Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+            self.checkForReviewOpportunity()
+        }
     }
     
     private func registerCustomFont() {
@@ -355,6 +367,9 @@ class NamesOfGodViewModel: NSObject, ObservableObject {
         printController.present(animated: true) { controller, completed, error in
             if completed {
                 print("✅ Impressão concluída com sucesso!")
+                // Marcar uso da funcionalidade de impressão
+                self.hasUsedPrintFeature = true
+                self.checkForReviewOpportunity()
             } else if let error = error {
                 print("❌ Erro na impressão: \(error.localizedDescription)")
             } else {
@@ -393,6 +408,11 @@ class NamesOfGodViewModel: NSObject, ObservableObject {
             // Se chegou ao último nome (índice 71 = nome 72)
             if currentIndex == namesOfGod.count - 1 {
                 print("🎯 Chegou ao último nome (72)")
+                
+                // Marcar primeira meditação completa
+                hasCompletedFirstMeditation = true
+                checkForReviewOpportunity()
+                
                 if isLoopEnabled {
                     print("🔄 Loop ativado - aguardando para restart")
                     // Se loop está ativado, aguardar um ciclo antes de restart
@@ -465,6 +485,8 @@ class NamesOfGodViewModel: NSObject, ObservableObject {
         isNavigatingManually = false
         stopContinuousNavigation() // Parar navegação contínua quando sair do modo pausado
         
+
+        
         // Ativar flash do contador para indicar reinício
         showCounterFlash = true
         
@@ -513,6 +535,10 @@ class NamesOfGodViewModel: NSObject, ObservableObject {
             audioPlayer?.delegate = self
             audioPlayer?.prepareToPlay()
             audioPlayer?.play()
+            
+            // Marcar uso da funcionalidade de áudio
+            hasUsedAudioFeature = true
+            checkForReviewOpportunity()
         } catch {
             print("Erro ao tocar áudio: \(error)")
         }
@@ -522,6 +548,70 @@ class NamesOfGodViewModel: NSObject, ObservableObject {
         speed = newSpeed
         if isPlaying && !isPaused {
             startTimer()
+        }
+    }
+    
+    // MARK: - Request Review
+    
+    func requestReviewIfAppropriate() {
+        // Só pedir review se ainda não pediu
+        guard !hasRequestedReview else { return }
+        
+        // Usar o método recomendado da Apple
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            SKStoreReviewController.requestReview(in: windowScene)
+            hasRequestedReview = true
+            print("⭐ Review solicitado!")
+        }
+    }
+    
+    func checkForReviewOpportunity() {
+        // Verificar múltiplos triggers para review
+        
+        // Trigger 1: Primeira meditação completa
+        if hasCompletedFirstMeditation && !hasRequestedReview {
+            print("🎯 Trigger 1: Primeira meditação completa")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.requestReviewIfAppropriate()
+            }
+            return
+        }
+        
+        // Trigger 2: Usou funcionalidade de áudio
+        if hasUsedAudioFeature && !hasRequestedReview {
+            print("🎯 Trigger 2: Usou funcionalidade de áudio")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.requestReviewIfAppropriate()
+            }
+            return
+        }
+        
+        // Trigger 3: Viu informações detalhadas
+        if hasViewedDetailedInfo && !hasRequestedReview {
+            print("🎯 Trigger 3: Viu informações detalhadas")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.requestReviewIfAppropriate()
+            }
+            return
+        }
+        
+        // Trigger 4: Usou funcionalidade de impressão
+        if hasUsedPrintFeature && !hasRequestedReview {
+            print("🎯 Trigger 4: Usou funcionalidade de impressão")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.requestReviewIfAppropriate()
+            }
+            return
+        }
+        
+        // Trigger 5: Tempo de uso (3 dias)
+        let daysSinceFirstUse = Calendar.current.dateComponents([.day], from: firstLaunchDate, to: Date()).day ?? 0
+        if daysSinceFirstUse >= 3 && !hasRequestedReview {
+            print("🎯 Trigger 5: 3 dias de uso")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.requestReviewIfAppropriate()
+            }
+            return
         }
     }
     
@@ -810,6 +900,8 @@ struct NamesOfGodView: View {
                                     // Botão + para mostrar informações detalhadas
                                     Button(action: {
                                         viewModel.showDetailedInfo = true
+                                        viewModel.hasViewedDetailedInfo = true
+                                        viewModel.checkForReviewOpportunity()
                                     }) {
                                         Image(systemName: "plus.circle.fill")
                                             .font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 42 : 36, weight: .medium))
@@ -1508,24 +1600,45 @@ struct InfoView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .shadow(color: Color.primary.opacity(0.1), radius: 4, x: 0, y: 2)
                         
-                        Button(action: {
-                            viewModel.print72Names()
-                        }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "printer")
-                                    .font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 28 : 20, weight: .medium))
-                                Text("Print Now")
-                                    .font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 26 : 18, weight: .semibold))
+                        HStack(spacing: UIDevice.current.userInterfaceIdiom == .pad ? 20 : 16) {
+                            Button(action: {
+                                viewModel.print72Names()
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "printer")
+                                        .font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 28 : 20, weight: .medium))
+                                    Text("Print")
+                                        .font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 26 : 18, weight: .semibold))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, UIDevice.current.userInterfaceIdiom == .pad ? 32 : 24)
+                                .padding(.vertical, UIDevice.current.userInterfaceIdiom == .pad ? 16 : 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(.purple)
+                                )
                             }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, UIDevice.current.userInterfaceIdiom == .pad ? 32 : 24)
-                            .padding(.vertical, UIDevice.current.userInterfaceIdiom == .pad ? 16 : 12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16) // AUMENTADO PARA 16
-                                    .fill(.purple)
-                            )
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Button(action: {
+                                viewModel.requestReviewIfAppropriate()
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 28 : 20, weight: .medium))
+                                    Text("Rate App")
+                                        .font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 26 : 18, weight: .semibold))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, UIDevice.current.userInterfaceIdiom == .pad ? 32 : 24)
+                                .padding(.vertical, UIDevice.current.userInterfaceIdiom == .pad ? 16 : 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(.orange)
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
-                        .buttonStyle(PlainButtonStyle())
                     }
                     .padding(UIDevice.current.userInterfaceIdiom == .pad ? 32 : 24)
                     .background(
